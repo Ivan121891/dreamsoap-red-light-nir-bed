@@ -2,7 +2,7 @@
   "use strict";
 
   // ------- Configuration -------
-  const SERVICE_NAME = "Red Light NIR Bed";
+  const SERVICE_NAME = "Red Light +NIR Bed With Free Consultation";
   const SERVICE_DURATION_MIN = 60;
 
   // GHL credentials
@@ -312,8 +312,8 @@
         lastName: lastName || '-',
         email,
         phone,
-        source: 'Red Light NIR Bed LP',
-        tags: ['Red Light NIR Bed'],
+        source: 'Red Light +NIR Bed With Free Consultation LP',
+        tags: ['Red Light +NIR Bed With Free Consultation'],
       });
       const contactId = contactRes.contact?.id || contactRes.id;
 
@@ -324,7 +324,7 @@
         assignedUserId: GHL.userId,
         startTime: selectedSlotIso,
         endTime:   isoInTz(endDate, BUSINESS_TZ),
-        title:     `${name} — Red Light NIR Bed`,
+        title:     `${name} — Red Light +NIR Bed With Free Consultation`,
       });
 
       track("Lead", { content_name: SERVICE_NAME });
