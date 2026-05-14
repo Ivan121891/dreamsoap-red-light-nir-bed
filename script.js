@@ -100,7 +100,7 @@
     if (cachedSlots[dateKey]) return cachedSlots[dateKey];
 
     // Business hours: 9-11 AM and 12-5 PM, 1-hour intervals
-    var desiredHours = [9, 10, 11, 12, 13, 14, 15, 16, 17];
+    var desiredHours = [9, 10, 12, 13, 14, 15, 16];
 
     var slots = [];
     desiredHours.forEach(function (h) {
@@ -326,6 +326,7 @@
         startTime: selectedSlotIso,
         endTime:   isoInTz(endDate, BUSINESS_TZ),
         title:     `${name} — Red Light +NIR Bed With Free Consultation`,
+        appointmentStatus: 'pending',
       });
 
       track("Lead", { content_name: SERVICE_NAME });
