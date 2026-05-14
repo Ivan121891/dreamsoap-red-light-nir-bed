@@ -326,7 +326,7 @@
         startTime: selectedSlotIso,
         endTime:   isoInTz(endDate, BUSINESS_TZ),
         title:     `${name} — Red Light +NIR Bed With Free Consultation`,
-        appointmentStatus: 'pending',
+        status: 'pending',
       });
 
       track("Lead", { content_name: SERVICE_NAME });
