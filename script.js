@@ -94,49 +94,25 @@
       sign + pad(Math.floor(abs / 60)) + ":" + pad(abs % 60);
   }
 
-  // ------- Fetch real available slots from GHL -------
+  // ------- Generate time slots based on business hours -------
   async function fetchSlotsForDate(date) {
     const dateKey = date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
     if (cachedSlots[dateKey]) return cachedSlots[dateKey];
 
-    // Build start/end as ms timestamps for GHL free-slots API
-    var startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
-    var endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0);
-    var startMs = startOfDay.getTime();
-    var endMs = endOfDay.getTime();
-
-    var url = GHL.apiBase + '/calendars/' + encodeURIComponent(GHL.calendarId) +
-      '/free-slots?startDate=' + startMs + '&endDate=' + endMs;
+    // Business hours: 9-11 AM and 12-5 PM, 1-hour intervals
+    var desiredHours = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 
     var slots = [];
-    try {
-      var res = await fetch(url, {
-        headers: {
-          'Authorization': 'Bearer ' + GHL.apiKey,
-          'Version': GHL.version,
-          'Accept': 'application/json',
-        },
+    desiredHours.forEach(function (h) {
+      // Build ISO string in business timezone
+      var iso = isoInTz(date, h, BUSINESS_TZ);
+      var d = new Date(iso);
+      var labelStr = d.toLocaleTimeString(undefined, {
+        hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12',
+        timeZone: BUSINESS_TZ
       });
-      if (res.ok) {
-        var data = await res.json();
-        // Response shape: { "2026-05-14": { slots: ["2026-05-14T17:00:00-07:00"] } }
-        var dayData = data[dateKey];
-        if (dayData && dayData.slots && dayData.slots.length) {
-          dayData.slots.forEach(function (iso) {
-            var d = new Date(iso);
-            var labelStr = d.toLocaleTimeString(undefined, {
-              hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12',
-              timeZone: BUSINESS_TZ
-            });
-            slots.push({ label: labelStr, iso: iso });
-          });
-        }
-      } else {
-        console.warn('free-slots API returned', res.status);
-      }
-    } catch (err) {
-      console.error('free-slots fetch error', err);
-    }
+      slots.push({ label: labelStr, iso: iso });
+    });
 
     cachedSlots[dateKey] = slots;
     return slots;
