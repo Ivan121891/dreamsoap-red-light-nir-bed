@@ -104,10 +104,14 @@
 
     var slots = [];
     desiredHours.forEach(function (h) {
-      // Build ISO string in business timezone
-      var iso = isoInTz(date, h, BUSINESS_TZ);
-      var d = new Date(iso);
-      var labelStr = d.toLocaleTimeString(undefined, {
+      // Build ISO string in business timezone with dynamic offset
+      var slotDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), h);
+      var off = offsetMinutesForTz(slotDate, BUSINESS_TZ);
+      var sign = off >= 0 ? '+' : '-';
+      var abs = Math.abs(off);
+      var tzString = sign + pad(Math.floor(abs / 60)) + ':' + pad(abs % 60);
+      var iso = dateKey + 'T' + pad(h) + ':00:00' + tzString;
+      var labelStr = new Date(iso).toLocaleTimeString(undefined, {
         hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12',
         timeZone: BUSINESS_TZ
       });
