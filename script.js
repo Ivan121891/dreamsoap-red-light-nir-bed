@@ -125,7 +125,8 @@
           dayData.slots.forEach(function (iso) {
             var d = new Date(iso);
             var labelStr = d.toLocaleTimeString(undefined, {
-              hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12'
+              hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12',
+              timeZone: BUSINESS_TZ
             });
             slots.push({ label: labelStr, iso: iso });
           });
