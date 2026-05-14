@@ -99,23 +99,43 @@
     const dateKey = date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
     if (cachedSlots[dateKey]) return cachedSlots[dateKey];
 
-    // Generate all desired 1-hour slots: 9-11 AM and 12-5 PM
-    var desiredHours = [9, 10, 11, 12, 13, 14, 15, 16, 17];
-    var off = -420; // PDT offset
-    var sign = "-";
-    var absOff = 420;
-    var tzString = '-07:00';
+    // Build start/end as ms timestamps for GHL free-slots API
+    var startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+    var endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0);
+    var startMs = startOfDay.getTime();
+    var endMs = endOfDay.getTime();
+
+    var url = GHL.apiBase + '/calendars/' + encodeURIComponent(GHL.calendarId) +
+      '/free-slots?startDate=' + startMs + '&endDate=' + endMs;
 
     var slots = [];
-    desiredHours.forEach(function (h) {
-      var iso = dateKey + 'T' + pad(h) + ':00:00' + tzString;
-      // Use dateKey directly for the label (local date parts)
-      var labelDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), h);
-      var labelStr = labelDate.toLocaleTimeString(undefined, {
-        hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12'
+    try {
+      var res = await fetch(url, {
+        headers: {
+          'Authorization': 'Bearer ' + GHL.apiKey,
+          'Version': GHL.version,
+          'Accept': 'application/json',
+        },
       });
-      slots.push({ label: labelStr, iso: iso });
-    });
+      if (res.ok) {
+        var data = await res.json();
+        // Response shape: { "2026-05-14": { slots: ["2026-05-14T17:00:00-07:00"] } }
+        var dayData = data[dateKey];
+        if (dayData && dayData.slots && dayData.slots.length) {
+          dayData.slots.forEach(function (iso) {
+            var d = new Date(iso);
+            var labelStr = d.toLocaleTimeString(undefined, {
+              hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12'
+            });
+            slots.push({ label: labelStr, iso: iso });
+          });
+        }
+      } else {
+        console.warn('free-slots API returned', res.status);
+      }
+    } catch (err) {
+      console.error('free-slots fetch error', err);
+    }
 
     cachedSlots[dateKey] = slots;
     return slots;
@@ -338,8 +358,12 @@
       showStep("confirmed");
     } catch (err) {
       console.error("GHL booking error", err);
-      const detail = (err && err.message) ? err.message : "Booking failed. Please try again or call us.";
-      errorText.textContent = detail;
+      var msg = (err && err.message) ? err.message : "Booking failed. Please try again or call us.";
+      // Check for "slot no longer available" type errors
+      if (msg.indexOf("no longer available") !== -1 || msg.indexOf("already booked") !== -1) {
+        msg = "That time was just taken. Please go back and select a different time slot.";
+      }
+      errorText.textContent = msg;
       errorText.classList.remove("hidden");
     } finally {
       submitBtn.disabled = false;
