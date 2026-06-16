@@ -1,5 +1,13 @@
 (function () {
   "use strict";
+  const TEST = new URLSearchParams(location.search).get('test') === '1';
+  function sendLead(path, payload) {
+    try {
+      var _b = JSON.stringify(payload);
+      if (navigator.sendBeacon && navigator.sendBeacon(path, new Blob([_b], { type: 'application/json' }))) return;
+      fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: _b }).catch(function () {});
+    } catch (_) {}
+  }
 
   // ------- Configuration -------
   const SERVICE_NAME = "Red Light +NIR Bed With Free Consultation";
@@ -56,7 +64,7 @@
       a.getDate() === b.getDate();
   }
   function formatLongDate(d) {
-    return d.toLocaleDateString(undefined, {
+    return d.toLocaleDateString('en-US', {
       weekday: "long", month: "long", day: "numeric", year: "numeric",
     });
   }
@@ -111,7 +119,7 @@
       var abs = Math.abs(off);
       var tzString = sign + pad(Math.floor(abs / 60)) + ':' + pad(abs % 60);
       var iso = dateKey + 'T' + pad(h) + ':00:00' + tzString;
-      var labelStr = new Date(iso).toLocaleTimeString(undefined, {
+      var labelStr = new Date(iso).toLocaleTimeString('en-US', {
         hour: 'numeric', minute: '2-digit', hour12: true, hourCycle: 'h12',
         timeZone: BUSINESS_TZ
       });
@@ -307,19 +315,36 @@
     const lastName = rest.join(" ");
 
     try {
+      var leadId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('lead_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+      sendLead('/api/lead', {
+        leadId: leadId,
+        locationId: GHL.locationId,
+        client: location.hostname.split('.')[0].split('-')[0],
+        page: location.hostname,
+        treatment: SERVICE_NAME,
+        calendarId: GHL.calendarId,
+        startTime: selectedSlotIso,
+        endTime: isoInTz(endDate, BUSINESS_TZ),
+        name: name, email: email, phone: phone,
+        fbclid: (new URLSearchParams(location.search)).get('fbclid') || undefined,
+        fbp: (document.cookie.match(/_fbp=([^;]+)/) || [])[1],
+        fbc: (document.cookie.match(/_fbc=([^;]+)/) || [])[1],
+        test: TEST,
+      });
       const contactRes = await ghlPost('/contacts/upsert', {
         locationId: GHL.locationId,
-        firstName: firstName || name,
+        firstName: (TEST ? "[TEST] " : "") + (firstName || name),
         lastName: lastName || '-',
         email,
         phone,
         source: 'Red Light +NIR Bed With Free Consultation LP',
-        tags: ['Red Light +NIR Bed With Free Consultation'],
+        tags: TEST ? ['Red Light +NIR Bed With Free Consultation', 'TEST-DONOTCOUNT'] : ['Red Light +NIR Bed With Free Consultation'],
       });
       const contactId = contactRes.contact?.id || contactRes.id;
 
-      await ghlPost('/calendars/events/appointments', {
+      const _aptRes = await ghlPost('/calendars/events/appointments', {
         calendarId: GHL.calendarId,
+        ignoreFreeSlotValidation: true,
         locationId: GHL.locationId,
         contactId,
         assignedUserId: GHL.userId,
@@ -329,8 +354,14 @@
         status: 'pending',
       });
 
+      var appointmentId = (_aptRes && (_aptRes.id || _aptRes.appointmentId || (_aptRes.appointment && _aptRes.appointment.id))) || null;
+      // Record the TRUE outcome: ghl call throws on non-2xx (-> outer catch ->
+      // 'fail'), so reaching here means 2xx; a missing id is a captured lead,
+      // not a booking — gate status + Schedule pixels on a real booking.
+      const bookingStatus = appointmentId ? 'success' : 'lead_only';
+      sendLead('/api/lead/result', { leadId: leadId, locationId: GHL.locationId, status: bookingStatus, appointmentId: appointmentId, eventId: (typeof eventId !== 'undefined' ? eventId : null), scheduleFired: (!TEST && bookingStatus === 'success'), test: TEST });
       track("Lead", { content_name: SERVICE_NAME });
-      track("Schedule", { content_name: SERVICE_NAME });
+      if (!TEST && bookingStatus === 'success') track("Schedule", { content_name: SERVICE_NAME });
 
       renderConfirmation({
         service: SERVICE_NAME,
@@ -340,6 +371,7 @@
       showStep("confirmed");
     } catch (err) {
       console.error("GHL booking error", err);
+      sendLead('/api/lead/result', { leadId: leadId, locationId: GHL.locationId, status: 'fail', error: (err && err.message) ? err.message : String(err), test: TEST });
       var msg = (err && err.message) ? err.message : "Booking failed. Please try again or call us.";
       // Check for "slot no longer available" type errors
       if (msg.indexOf("no longer available") !== -1 || msg.indexOf("already booked") !== -1) {
